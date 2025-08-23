@@ -20,7 +20,7 @@ arrayref = "0.3.9"
 bytemuck = { version = "1.18.0", features = ["derive"] }
 num_enum = { version = "0.7.3", default-features = false }
 solana-program = "2.1.0"
-spl-discriminator = { version = "0.4.1", features = ["derive"] }
+spl-discriminator = "0.4.1"
 spl-memo = { version = "5.0.0", features = ["no-entrypoint"] }
 spl-pod = "0.5.1"
 spl-program-error = "0.5.0"
