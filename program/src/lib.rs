@@ -1,6 +1,6 @@
 #![allow(clippy::arithmetic_side_effects)]
 #![deny(missing_docs)]
-#![cfg_attr(not(test), warn(unsafe_code))]
+#![cfg_attr(not(test), forbid(unsafe_code))]
 
 //! An ERC20-like Token program for the Solana blockchain
 
@@ -14,6 +14,9 @@ pub mod onchain;
 pub mod pod;
 pub mod pod_instruction;
 pub mod processor;
+pub mod proof;
+#[cfg(feature = "serde-traits")]
+pub mod serialization;
 pub mod state;
 
 #[cfg(not(feature = "no-entrypoint"))]
@@ -21,15 +24,14 @@ mod entrypoint;
 
 // Export current sdk types for downstream users building with a different sdk
 // version
-pub use solana_zk_sdk;
-pub use spl_token_2022_interface::{check_id, check_program_account, id, ID};
-use {
-    error::TokenError,
-    solana_program_error::{ProgramError, ProgramResult},
-    solana_pubkey::Pubkey,
-    solana_sdk_ids::system_program,
-    solana_zk_sdk::encryption::pod::elgamal::PodElGamalCiphertext,
+use solana_program::{
+    entrypoint::ProgramResult,
+    program_error::ProgramError,
+    program_memory::sol_memcmp,
+    pubkey::{Pubkey, PUBKEY_BYTES},
+    system_program,
 };
+pub use {solana_program, solana_zk_token_sdk};
 
 /// Convert the UI representation of a token amount (using the decimals field
 /// defined in its mint) to the raw amount
@@ -61,17 +63,12 @@ pub fn amount_to_ui_amount_string(amount: u64, decimals: u8) -> String {
 /// Convert a raw amount to its UI representation using the given decimals field
 /// Excess zeroes or unneeded decimal point are trimmed.
 pub fn amount_to_ui_amount_string_trimmed(amount: u64, decimals: u8) -> String {
-    let s = amount_to_ui_amount_string(amount, decimals);
-    trim_ui_amount_string(s, decimals)
-}
-
-/// Trims a string number by removing excess zeroes or unneeded decimal point
-fn trim_ui_amount_string(mut ui_amount: String, decimals: u8) -> String {
+    let mut s = amount_to_ui_amount_string(amount, decimals);
     if decimals > 0 {
-        let zeros_trimmed = ui_amount.trim_end_matches('0');
-        ui_amount = zeros_trimmed.trim_end_matches('.').to_string();
+        let zeros_trimmed = s.trim_end_matches('0');
+        s = zeros_trimmed.trim_end_matches('.').to_string();
     }
-    ui_amount
+    s
 }
 
 /// Try to convert a UI representation of a token amount to its raw amount using
@@ -100,18 +97,35 @@ pub fn try_ui_amount_into_amount(ui_amount: String, decimals: u8) -> Result<u64,
         .map_err(|_| ProgramError::InvalidArgument)
 }
 
-/// Checks that the supplied program ID is correct for the ZK ElGamal proof
-/// program
-pub fn check_zk_elgamal_proof_program_account(
-    zk_elgamal_proof_program_id: &Pubkey,
-) -> ProgramResult {
-    if zk_elgamal_proof_program_id != &solana_zk_sdk::zk_elgamal_proof_program::id() {
+solana_program::declare_id!("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
+
+/// Checks that the supplied program ID is correct for spl-token-2022
+pub fn check_program_account(spl_token_program_id: &Pubkey) -> ProgramResult {
+    if spl_token_program_id != &id() {
         return Err(ProgramError::IncorrectProgramId);
     }
     Ok(())
 }
 
-/// Checks if the supplied program ID is that of the system program
+/// Checks that the supplied program ID is corect for spl-token or
+/// spl-token-2022
+pub fn check_spl_token_program_account(spl_token_program_id: &Pubkey) -> ProgramResult {
+    if spl_token_program_id != &id() && spl_token_program_id != &spl_token::id() {
+        return Err(ProgramError::IncorrectProgramId);
+    }
+    Ok(())
+}
+
+/// Checks that the supplied program ID is correct for the ZK Token proof
+/// program
+pub fn check_zk_token_proof_program_account(zk_token_proof_program_id: &Pubkey) -> ProgramResult {
+    if zk_token_proof_program_id != &solana_zk_token_sdk::zk_token_proof_program::id() {
+        return Err(ProgramError::IncorrectProgramId);
+    }
+    Ok(())
+}
+
+/// Checks if the spplied program ID is that of the system program
 pub fn check_system_program_account(system_program_id: &Pubkey) -> ProgramResult {
     if system_program_id != &system_program::id() {
         return Err(ProgramError::IncorrectProgramId);
@@ -119,29 +133,8 @@ pub fn check_system_program_account(system_program_id: &Pubkey) -> ProgramResult
     Ok(())
 }
 
-/// Checks if the supplied program ID is that of the ElGamal registry program
-pub(crate) fn check_elgamal_registry_program_account(
-    elgamal_registry_account_program_id: &Pubkey,
-) -> ProgramResult {
-    if elgamal_registry_account_program_id != &spl_elgamal_registry::id() {
-        return Err(ProgramError::IncorrectProgramId);
-    }
-    Ok(())
-}
-
-/// Check instruction data and proof data auditor ciphertext consistency
-#[cfg(feature = "zk-ops")]
-pub(crate) fn check_auditor_ciphertext(
-    instruction_data_auditor_ciphertext_lo: &PodElGamalCiphertext,
-    instruction_data_auditor_ciphertext_hi: &PodElGamalCiphertext,
-    proof_context_auditor_ciphertext_lo: &PodElGamalCiphertext,
-    proof_context_auditor_ciphertext_hi: &PodElGamalCiphertext,
-) -> ProgramResult {
-    if instruction_data_auditor_ciphertext_lo != proof_context_auditor_ciphertext_lo {
-        return Err(TokenError::ConfidentialTransferBalanceMismatch.into());
-    }
-    if instruction_data_auditor_ciphertext_hi != proof_context_auditor_ciphertext_hi {
-        return Err(TokenError::ConfidentialTransferBalanceMismatch.into());
-    }
-    Ok(())
+/// Checks two pubkeys for equality in a computationally cheap way using
+/// `sol_memcmp`
+pub fn cmp_pubkeys(a: &Pubkey, b: &Pubkey) -> bool {
+    sol_memcmp(a.as_ref(), b.as_ref(), PUBKEY_BYTES) == 0
 }

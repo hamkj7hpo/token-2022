@@ -8,15 +8,16 @@ use {
         processor::Processor,
         state::Account,
     },
-    solana_account_info::{next_account_info, AccountInfo},
-    solana_cpi::invoke,
-    solana_msg::msg,
-    solana_program_error::ProgramResult,
-    solana_program_option::COption,
-    solana_pubkey::Pubkey,
-    solana_rent::Rent,
-    solana_system_interface::instruction as system_instruction,
-    solana_sysvar::Sysvar,
+    solana_program::{
+        account_info::{next_account_info, AccountInfo},
+        entrypoint::ProgramResult,
+        msg,
+        program::invoke,
+        program_option::COption,
+        pubkey::Pubkey,
+        system_instruction,
+        sysvar::{rent::Rent, Sysvar},
+    },
 };
 
 /// Processes a [Reallocate](enum.TokenInstruction.html) instruction
@@ -67,10 +68,10 @@ pub fn process_reallocate(
 
     // reallocate
     msg!(
-        "account needs resize, +{:?} bytes",
+        "account needs realloc, +{:?} bytes",
         needed_account_len - token_account_info.data_len()
     );
-    token_account_info.resize(needed_account_len)?;
+    token_account_info.realloc(needed_account_len, false)?;
 
     // if additional lamports needed to remain rent-exempt, transfer them
     let rent = Rent::get()?;

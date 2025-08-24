@@ -10,13 +10,15 @@ use {
         pod::PodAccount,
         processor::Processor,
     },
-    solana_account_info::{next_account_info, AccountInfo},
-    solana_msg::msg,
-    solana_program_error::ProgramResult,
-    solana_pubkey::Pubkey,
+    solana_program::{
+        account_info::{next_account_info, AccountInfo},
+        entrypoint::ProgramResult,
+        msg,
+        pubkey::Pubkey,
+    },
 };
 
-/// Toggle the `CpiGuard` extension, initializing the extension if not already
+/// Toggle the CpiGuard extension, initializing the extension if not already
 /// present.
 fn process_toggle_cpi_guard(
     program_id: &Pubkey,

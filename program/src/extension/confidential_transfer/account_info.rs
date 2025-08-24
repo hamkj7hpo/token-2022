@@ -2,24 +2,26 @@ use {
     crate::{
         error::TokenError,
         extension::confidential_transfer::{
-            ConfidentialTransferAccount, DecryptableBalance, EncryptedBalance,
-            PENDING_BALANCE_LO_BIT_LENGTH,
+            ciphertext_extraction::SourceDecryptHandles,
+            split_proof_generation::transfer_split_proof_data, ConfidentialTransferAccount,
+            DecryptableBalance, EncryptedBalance, PENDING_BALANCE_LO_BIT_LENGTH,
         },
     },
     bytemuck::{Pod, Zeroable},
-    solana_zk_sdk::{
+    solana_zk_token_sdk::{
         encryption::{
             auth_encryption::{AeCiphertext, AeKey},
             elgamal::{ElGamalKeypair, ElGamalPubkey, ElGamalSecretKey},
         },
-        zk_elgamal_proof_program::proof_data::ZeroCiphertextProofData,
+        instruction::{
+            transfer::{FeeParameters, TransferData, TransferWithFeeData},
+            withdraw::WithdrawData,
+            zero_balance::ZeroBalanceProofData,
+            BatchedGroupedCiphertext2HandlesValidityProofData, BatchedRangeProofU128Data,
+            CiphertextCommitmentEqualityProofData,
+        },
     },
     spl_pod::primitives::PodU64,
-    spl_token_confidential_transfer_proof_generation::{
-        transfer::{transfer_split_proof_data, TransferProofData},
-        transfer_with_fee::{transfer_with_fee_split_proof_data, TransferWithFeeProofData},
-        withdraw::{withdraw_proof_data, WithdrawProofData},
-    },
 };
 
 /// Confidential transfer extension information needed to construct an
@@ -43,13 +45,13 @@ impl EmptyAccountAccountInfo {
     pub fn generate_proof_data(
         &self,
         elgamal_keypair: &ElGamalKeypair,
-    ) -> Result<ZeroCiphertextProofData, TokenError> {
+    ) -> Result<ZeroBalanceProofData, TokenError> {
         let available_balance = self
             .available_balance
             .try_into()
             .map_err(|_| TokenError::MalformedCiphertext)?;
 
-        ZeroCiphertextProofData::new(elgamal_keypair, &available_balance)
+        ZeroBalanceProofData::new(elgamal_keypair, &available_balance)
             .map_err(|_| TokenError::ProofGeneration)
     }
 }
@@ -64,7 +66,7 @@ pub struct ApplyPendingBalanceAccountInfo {
     pub(crate) pending_balance_credit_counter: PodU64,
     /// The low 16 bits of the pending balance (encrypted by `elgamal_pubkey`)
     pub(crate) pending_balance_lo: EncryptedBalance,
-    /// The high 32 bits of the pending balance (encrypted by `elgamal_pubkey`)
+    /// The high 48 bits of the pending balance (encrypted by `elgamal_pubkey`)
     pub(crate) pending_balance_hi: EncryptedBalance,
     /// The decryptable available balance
     pub(crate) decryptable_available_balance: DecryptableBalance,
@@ -140,42 +142,6 @@ impl ApplyPendingBalanceAccountInfo {
 
         Ok(aes_key.encrypt(new_decrypted_available_balance))
     }
-
-    /// Decrypt and return the pending balance for this account.
-    ///
-    /// This combines the low 16 bits and high 48 bits of the pending balance
-    /// into a single u64 value.
-    pub fn get_pending_balance(
-        &self,
-        elgamal_secret_key: &ElGamalSecretKey,
-    ) -> Result<u64, TokenError> {
-        let decrypted_lo = self.decrypted_pending_balance_lo(elgamal_secret_key)?;
-        let decrypted_hi = self.decrypted_pending_balance_hi(elgamal_secret_key)?;
-
-        combine_balances(decrypted_lo, decrypted_hi).ok_or(TokenError::AccountDecryption)
-    }
-
-    /// Check if this account has any pending balance.
-    pub fn has_pending_balance(&self) -> bool {
-        u64::from(self.pending_balance_credit_counter) > 0
-    }
-
-    /// Get the available balance for this account.
-    pub fn get_available_balance(&self, aes_key: &AeKey) -> Result<u64, TokenError> {
-        self.decrypted_available_balance(aes_key)
-    }
-
-    /// Get the total balance (pending and available) for this account.
-    pub fn get_total_balance(
-        &self,
-        elgamal_secret_key: &ElGamalSecretKey,
-        aes_key: &AeKey,
-    ) -> Result<u64, TokenError> {
-        let pending = self.get_pending_balance(elgamal_secret_key)?;
-        let available = self.get_available_balance(aes_key)?;
-
-        pending.checked_add(available).ok_or(TokenError::Overflow)
-    }
 }
 
 /// Confidential Transfer extension information needed to construct a `Withdraw`
@@ -183,7 +149,7 @@ impl ApplyPendingBalanceAccountInfo {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
 pub struct WithdrawAccountInfo {
-    /// The available balance (encrypted by `encryption_pubkey`)
+    /// The available balance (encrypted by `encrypiton_pubkey`)
     pub available_balance: EncryptedBalance,
     /// The decryptable available balance
     pub decryptable_available_balance: DecryptableBalance,
@@ -214,20 +180,20 @@ impl WithdrawAccountInfo {
         withdraw_amount: u64,
         elgamal_keypair: &ElGamalKeypair,
         aes_key: &AeKey,
-    ) -> Result<WithdrawProofData, TokenError> {
+    ) -> Result<WithdrawData, TokenError> {
         let current_available_balance = self
             .available_balance
             .try_into()
             .map_err(|_| TokenError::MalformedCiphertext)?;
         let current_decrypted_available_balance = self.decrypted_available_balance(aes_key)?;
 
-        withdraw_proof_data(
-            &current_available_balance,
-            current_decrypted_available_balance,
+        WithdrawData::new(
             withdraw_amount,
             elgamal_keypair,
+            current_decrypted_available_balance,
+            &current_available_balance,
         )
-        .map_err(|e| -> TokenError { e.into() })
+        .map_err(|_| TokenError::ProofGeneration)
     }
 
     /// Update the decryptable available balance.
@@ -250,7 +216,7 @@ impl WithdrawAccountInfo {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
 pub struct TransferAccountInfo {
-    /// The available balance (encrypted by `encryption_pubkey`)
+    /// The available balance (encrypted by `encrypiton_pubkey`)
     pub available_balance: EncryptedBalance,
     /// The decryptable available balance
     pub decryptable_available_balance: DecryptableBalance,
@@ -275,6 +241,37 @@ impl TransferAccountInfo {
             .ok_or(TokenError::AccountDecryption)
     }
 
+    /// Create a transfer proof data.
+    pub fn generate_transfer_proof_data(
+        &self,
+        transfer_amount: u64,
+        elgamal_keypair: &ElGamalKeypair,
+        aes_key: &AeKey,
+        destination_elgamal_pubkey: &ElGamalPubkey,
+        auditor_elgamal_pubkey: Option<&ElGamalPubkey>,
+    ) -> Result<TransferData, TokenError> {
+        let current_source_available_balance = self
+            .available_balance
+            .try_into()
+            .map_err(|_| TokenError::MalformedCiphertext)?;
+        let current_source_decrypted_available_balance =
+            self.decrypted_available_balance(aes_key)?;
+
+        let default_auditor_pubkey = ElGamalPubkey::default();
+        let auditor_elgamal_pubkey = auditor_elgamal_pubkey.unwrap_or(&default_auditor_pubkey);
+
+        TransferData::new(
+            transfer_amount,
+            (
+                current_source_decrypted_available_balance,
+                &current_source_available_balance,
+            ),
+            elgamal_keypair,
+            (destination_elgamal_pubkey, auditor_elgamal_pubkey),
+        )
+        .map_err(|_| TokenError::ProofGeneration)
+    }
+
     /// Create a transfer proof data that is split into equality, ciphertext
     /// validity, and range proofs.
     pub fn generate_split_transfer_proof_data(
@@ -284,7 +281,15 @@ impl TransferAccountInfo {
         aes_key: &AeKey,
         destination_elgamal_pubkey: &ElGamalPubkey,
         auditor_elgamal_pubkey: Option<&ElGamalPubkey>,
-    ) -> Result<TransferProofData, TokenError> {
+    ) -> Result<
+        (
+            CiphertextCommitmentEqualityProofData,
+            BatchedGroupedCiphertext2HandlesValidityProofData,
+            BatchedRangeProofU128Data,
+            SourceDecryptHandles,
+        ),
+        TokenError,
+    > {
         let current_available_balance = self
             .available_balance
             .try_into()
@@ -303,46 +308,48 @@ impl TransferAccountInfo {
             destination_elgamal_pubkey,
             auditor_elgamal_pubkey,
         )
-        .map_err(|e| -> TokenError { e.into() })
     }
 
-    /// Create a transfer proof data that is split into equality, ciphertext
-    /// validity (transfer amount), percentage-with-cap, ciphertext validity
-    /// (fee), and range proofs.
+    /// Create a transfer with fee proof data
     #[allow(clippy::too_many_arguments)]
-    pub fn generate_split_transfer_with_fee_proof_data(
+    pub fn generate_transfer_with_fee_proof_data(
         &self,
         transfer_amount: u64,
-        source_elgamal_keypair: &ElGamalKeypair,
+        elgamal_keypair: &ElGamalKeypair,
         aes_key: &AeKey,
         destination_elgamal_pubkey: &ElGamalPubkey,
         auditor_elgamal_pubkey: Option<&ElGamalPubkey>,
         withdraw_withheld_authority_elgamal_pubkey: &ElGamalPubkey,
         fee_rate_basis_points: u16,
         maximum_fee: u64,
-    ) -> Result<TransferWithFeeProofData, TokenError> {
-        let current_available_balance = self
+    ) -> Result<TransferWithFeeData, TokenError> {
+        let current_source_available_balance = self
             .available_balance
             .try_into()
             .map_err(|_| TokenError::MalformedCiphertext)?;
-        let current_decryptable_available_balance = self
-            .decryptable_available_balance
-            .try_into()
-            .map_err(|_| TokenError::MalformedCiphertext)?;
+        let current_source_decrypted_available_balance =
+            self.decrypted_available_balance(aes_key)?;
 
-        transfer_with_fee_split_proof_data(
-            &current_available_balance,
-            &current_decryptable_available_balance,
-            transfer_amount,
-            source_elgamal_keypair,
-            aes_key,
-            destination_elgamal_pubkey,
-            auditor_elgamal_pubkey,
-            withdraw_withheld_authority_elgamal_pubkey,
+        let default_auditor_pubkey = ElGamalPubkey::default();
+        let auditor_elgamal_pubkey = auditor_elgamal_pubkey.unwrap_or(&default_auditor_pubkey);
+
+        let fee_parameters = FeeParameters {
             fee_rate_basis_points,
             maximum_fee,
+        };
+
+        TransferWithFeeData::new(
+            transfer_amount,
+            (
+                current_source_decrypted_available_balance,
+                &current_source_available_balance,
+            ),
+            elgamal_keypair,
+            (destination_elgamal_pubkey, auditor_elgamal_pubkey),
+            fee_parameters,
+            withdraw_withheld_authority_elgamal_pubkey,
         )
-        .map_err(|e| -> TokenError { e.into() })
+        .map_err(|_| TokenError::ProofGeneration)
     }
 
     /// Update the decryptable available balance.
@@ -360,8 +367,7 @@ impl TransferAccountInfo {
     }
 }
 
-/// Combines pending balances low and high bits into singular pending balance
-pub fn combine_balances(balance_lo: u64, balance_hi: u64) -> Option<u64> {
+fn combine_balances(balance_lo: u64, balance_hi: u64) -> Option<u64> {
     balance_hi
         .checked_shl(PENDING_BALANCE_LO_BIT_LENGTH)?
         .checked_add(balance_lo)
