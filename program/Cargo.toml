@@ -48,4 +48,4 @@ spl-type-length-value = { version = "0.7.0" }
 spl-token-group-interface = { version = "0.2.4" }
 spl-token-metadata-interface = { version = "0.3.4" }
 spl-transfer-hook-interface = { version = "0.6.4" }
-spl-tlv-account-resolution = { version = "0.6.4" }
+spl-tlv-account-resolution = { version = "=0.6.4" }
