@@ -43,7 +43,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 workspace = true
 
 [patch.crates-io]
-spl-discriminator = "0.4.1" }
+spl-discriminator = "0.4.1"
 spl-type-length-value = { version = "0.7.0" }
 spl-token-group-interface = { version = "0.2.4" }
 spl-token-metadata-interface = { version = "0.3.4" }
