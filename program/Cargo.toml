@@ -1,9 +1,9 @@
 [package]
 name = "spl-token-2022"
-version = "3.0.3"
+version = "3.0.2"
 description = "Solana Program Library Token 2022"
 authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
-repository = "https://github.com/solana-labs/solana-program-library"
+repository = "https://github.com/hamkj7hpo/token-2022"
 license = "Apache-2.0"
 edition = "2021"
 
@@ -12,27 +12,23 @@ no-entrypoint = []
 test-sbf = []
 
 [dependencies]
-arrayref = "0.3.7"
+arrayref = "0.3.9"
 bytemuck = { version = "1.18.0", features = ["derive"] }
 num-derive = "0.4"
 num-traits = "0.2"
-num_enum = "0.7.2"
+num_enum = "0.7"
 solana-program = { git = "https://github.com/hamkj7hpo/solana.git", rev = "5208a7870826307290c30b7d80768f40267433a1" }
-solana-zk-token-sdk = "2.1.0"
-spl-discriminator = "0.4.1"
-spl-memo = "5.0.0"
-spl-pod = "0.4.0"
-spl-token = "5.0.0"
-spl-token-group-interface = "0.2.4"
-spl-token-metadata-interface = "0.3.4"
-spl-transfer-hook-interface = "0.6.4"
-spl-type-length-value = "0.6.0"
+spl-discriminator = { git = "https://github.com/hamkj7hpo/solana-program-library.git", rev = "f81cfea71b4b961e1c7daf82d8f307ad9b3bc194", package = "spl-discriminator" }
+spl-pod = { git = "https://github.com/hamkj7hpo/spl-pod.git", rev = "0ff7d641b198149f6e0b1265e85b7258db87e254" }
+spl-token = { git = "https://github.com/hamkj7hpo/solana-program-library.git", rev = "f81cfea71b4b961e1c7daf82d8f307ad9b3bc194", package = "spl-token", features = ["no-entrypoint"] }
+spl-token-group-interface = { git = "https://github.com/hamkj7hpo/token-group.git", rev = "decb8c063443bbd67ad7d00e7fbfab3a76029620" }
+spl-token-metadata-interface = { git = "https://github.com/hamkj7hpo/token-metadata.git", rev = "fcb4a1c79576a6d4eb8dea8dd38b370529dda008" }
+spl-transfer-hook-interface = { git = "https://github.com/hamkj7hpo/transfer-hook.git", rev = "7be529916806e8693d6fb2622db31e5d463e9f79" }
+spl-type-length-value = { path = "/tmp/spl-type-length-value" }
 thiserror = "1.0"
-
-[dev-dependencies]
-solana-program-test = "2.1.0"
-solana-sdk = "2.1.0"
-test-case = "3.3.1"
 
 [lib]
 crate-type = ["cdylib", "lib"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
