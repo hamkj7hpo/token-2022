@@ -2,54 +2,47 @@
 edition = "2021"
 name = "spl-token-2022"
 version = "3.0.3"
-authors = ["Solana Labs Maintainers <maintainers@solanalabs.com>"]
+authors = { workspace = true }
 exclude = ["js/**"]
 description = "Solana Program Library Token 2022"
 readme = "README.md"
-license = "Apache-2.0"
-repository = "https://github.com/solana-labs/solana-program-library"
+repository = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
 
-[package.metadata.docs.rs]
-targets = ["x86_64-unknown-linux-gnu"]
+[features]
+no-entrypoint = []
+test-sbf = []
+zk-ops = []
+
+[dependencies]
+arrayref = "0.3.9"
+bytemuck = { version = "1.18.0", features = ["derive"] }
+num_enum = { version = "0.7.3", default-features = false }
+solana-program = "2.3.0"
+spl-discriminator = "0.4.1"
+spl-memo = { version = "5.0.0", features = ["no-entrypoint"] }
+spl-pod = "0.5.1"
+spl-program-error = "0.5.0"
+spl-token-group-interface = { version = "0.2.4" }
+spl-token-metadata-interface = { version = "0.3.4" }
+spl-transfer-hook-interface = { version = "0.6.4" }
+spl-type-length-value = { git = "https://github.com/hamkj7hpo/spl-type-length-value.git", rev = "5328db539266002834f15d0ae8881a61d99d78e9" }
+thiserror = "1.0.63"
+
+[dev-dependencies]
+solana-sdk = "2.3.6"
 
 [lib]
 crate-type = ["cdylib", "lib"]
 
-[dependencies]
-arrayref = "0.3.7"
-base64 = { version = "0.22.0", optional = true }
-bytemuck = { version = "1.15.0", features = ["derive"] }
-num-derive = "0.4"
-num-traits = "0.2"
-num_enum = "0.7.2"
-serde = { version = "1.0.197", optional = true }
-serde_with = { version = "3.7.0", optional = true }
-solana-program = "2.2.1"
-solana-security-txt = "1.1.1"
-solana-zk-token-sdk = "2.2.0"
-spl-memo = { version = "4.0", features = ["no-entrypoint"] }
-spl-pod = "0.2.2"
-spl-token = { version = "4.0", features = ["no-entrypoint"] }
-spl-token-group-interface = "0.2.3"
-spl-token-metadata-interface = "0.3.3"
-spl-transfer-hook-interface = "0.6.3"
-spl-type-length-value = "0.4.3"
-thiserror = "1.0"
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
 
-[dev-dependencies]
-lazy_static = "1.4.0"
-proptest = "1.4"
-serde_json = "1.0.115"
-serial_test = "3.0.0"
-solana-program-test = "2.2.1"
-solana-sdk = "2.2.1"
-spl-tlv-account-resolution = "0.6.3"
-
-[features]
-confidential-hook = []
-default = ["confidential-hook", "token-group", "zk-ops"]
-no-entrypoint = []
-serde-traits = ["serde", "serde_with", "base64", "spl-pod/serde-traits"]
-test-sbf = []
-token-group = []
-zk-ops = []
+[patch.crates-io]
+spl-discriminator = "0.4.1"
+spl-type-length-value = { git = "https://github.com/hamkj7hpo/spl-type-length-value.git", rev = "5328db539266002834f15d0ae8881a61d99d78e9" }
+spl-token-group-interface = { version = "0.2.4" }
+spl-token-metadata-interface = { version = "0.3.4" }
+spl-transfer-hook-interface = { version = "0.6.4" }
+spl-tlv-account-resolution = { version = "=0.6.4" }
