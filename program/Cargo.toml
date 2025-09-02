@@ -24,7 +24,7 @@ bytemuck = { version = "1.18.0", features = ["derive"] }
 num-derive = "0.4"
 num-traits = "0.2"
 num_enum = "0.7.2"
-solana-program = { git = "https://github.com/hamkj7hpo/solana.git", rev = "bcc398b87fbe0905d1a847cb94a264ecfaa5e95d" }
+solana-program = { git = "https://github.com/solana-labs/solana.git", rev = "b1e378009ffee4c75965723d3317fccbebcf2524" }
 spl-discriminator = { git = "https://github.com/hamkj7hpo/solana-program-library.git", rev = "f86fefd752bc4ca50adc8f06cd9ba579326c769e", package = "spl-discriminator" }
 spl-memo = { git = "https://github.com/hamkj7hpo/memo.git", rev = "8b68bff69ad2616c511f58c16e7588e8997c076c", package = "spl-memo", version = "6.0.0" }
 spl-pod = { git = "https://github.com/hamkj7hpo/spl-pod.git", rev = "5d5ef3ff0e782dc6b22ddc15d08caa05e173abeb", default-features = false }
@@ -37,8 +37,8 @@ solana-zk-sdk = { git = "https://github.com/hamkj7hpo/zk-elgamal-proof.git", rev
 thiserror = "1.0.38"
 
 [dev-dependencies]
-solana-program-test = { git = "https://github.com/hamkj7hpo/solana.git", rev = "bcc398b87fbe0905d1a847cb94a264ecfaa5e95d" }
-solana-sdk = { git = "https://github.com/hamkj7hpo/solana.git", rev = "bcc398b87fbe0905d1a847cb94a264ecfaa5e95d" }
+solana-program-test = { git = "https://github.com/solana-labs/solana.git", rev = "b1e378009ffee4c75965723d3317fccbebcf2524" }
+solana-sdk = { git = "https://github.com/solana-labs/solana.git", rev = "b1e378009ffee4c75965723d3317fccbebcf2524" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
